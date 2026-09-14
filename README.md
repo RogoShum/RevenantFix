@@ -36,6 +36,8 @@ This release does not distribute `regulation.bin`, `common.emevd` or map replace
 - [Nightreign Seamless Co-op](https://www.nexusmods.com/eldenringnightreign/mods/3), installed separately.
 - [Mod Engine 3](https://github.com/garyttierney/me3) for the installation method below.
 
+**All players, including the host and every client, must install this mod for full functionality. Correct operation is not guaranteed if any player does not have it installed.**
+
 **Tested with up to five players; six-player testing has not yet been performed.**
 
 ## Installation
