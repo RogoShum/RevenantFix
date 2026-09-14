@@ -1,7 +1,5 @@
 # 6 player Revenant fixes
 
-By **RogoShum**
-
 ## Vibe Coding Warning
 
 **I have no C++ development experience. All project-owned code was written by AI and has only been validated through my in-game testing, without a professional C++ code review. I cannot guarantee that the code is minimal or elegant, or that every native hook, multiplayer interaction and recovery path is correct and reliable.** Third-party code and assets retain their original authorship and licenses.
@@ -100,7 +98,3 @@ cmake --build build --config Release
 ```
 
 With a Visual Studio multi-configuration build, the DLL is `build/Release/RevenantFix.dll`. Building proves compilation, not runtime correctness. The inspected CMake project does not register an automated test suite. Record release-specific game tests and preserve matching debugging symbols.
-
-## Source snapshot
-
-This source snapshot contains no original development Git history.
