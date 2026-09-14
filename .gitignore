@@ -1,0 +1,28 @@
+# Local build and editor files
+/build/
+/build_*/
+/.vs/
+/.vscode/
+__pycache__/
+*.pyc
+*.user
+*.suo
+# Generated native binaries and diagnostics
+*.dll
+*.exe
+*.pdb
+*.ilk
+*.lib
+*.exp
+*.obj
+*.log
+*.dmp
+*.mdmp
+*.resources
+# Personal runtime configuration/state; examples remain tracked
+*.ini
+!*.ini.example
+.env
+.env.*
+Desktop.ini
+Thumbs.db
