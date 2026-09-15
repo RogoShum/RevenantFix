@@ -10112,9 +10112,12 @@ bool ArmBhrcFriendJoinAuthorityObserverFromCommittedScan(
   }
 
   PersistedReconnectIdentity id{};
+  // The persisted owner may have left while this player was disconnected.
+  // Keep the same-A/self identity checks, but ask the live NRSC owner above
+  // to classify the returning player before granting any native admission.
   const bool persisted_tuple_complete = LoadPersistedReconnectIdentity(&id) &&
       id.master_lobby_id == master_lobby_id &&
-      id.host_steam_id == owner_steam_id &&
+      id.host_steam_id != 0 &&
       id.record_role == kBhrcRecordRoleSelf && id.lobby_id != 0 &&
       id.lobby_id != master_lobby_id && id.record_key == local_steam_id &&
       id.generation != 0 && id.record_hash32 != 0;
@@ -10190,7 +10193,7 @@ bool ArmBhrcFriendJoinAuthorityObserverFromCommittedScan(
       record_key, client_generation, identity_hash32, reason, true, 0,
       true);
   Log(
-      "BHRC active_friend_admission edge=nrsc_scan_authority_observer outcome=%s reason=%s classificationHint=%s masterA=%016llx authorizedBHint=%016llx owner=%016llx local=%016llx recordKey=%016llx generation=%u identityHash=%08x attemptSerial=0 context=%p metadata=nrsc_ynx3_seamless_master_lobby stateCommitted=1 peerActive=1 authorityObserverOnly=1 terminalHandoffReplaced=%d nativeStateWrite=0",
+      "BHRC active_friend_admission edge=nrsc_scan_authority_observer outcome=%s reason=%s classificationHint=%s masterA=%016llx authorizedBHint=%016llx owner=%016llx local=%016llx recordKey=%016llx generation=%u identityHash=%08x attemptSerial=0 context=%p metadata=nrsc_ynx3_seamless_master_lobby stateCommitted=1 peerActive=1 authorityObserverOnly=1 terminalHandoffReplaced=%d nativeStateWrite=0 savedHost=%016llx ownerChanged=%d",
       armed ? "armed" : "busy",
       reason != nullptr ? reason : "unknown",
       "returning_or_host_redirect",
@@ -10199,7 +10202,9 @@ bool ArmBhrcFriendJoinAuthorityObserverFromCommittedScan(
       static_cast<unsigned long long>(owner_steam_id),
       static_cast<unsigned long long>(local_steam_id),
       static_cast<unsigned long long>(record_key), client_generation,
-      identity_hash32, scan_context, terminal_handoff_retired ? 1 : 0);
+      identity_hash32, scan_context, terminal_handoff_retired ? 1 : 0,
+      static_cast<unsigned long long>(id.host_steam_id),
+      id.host_steam_id != owner_steam_id ? 1 : 0);
   return armed;
 }
 
@@ -11587,10 +11592,13 @@ const bool identity_loaded = LoadPersistedReconnectIdentity(&identity);
 const bool identity_player_match = identity_loaded &&
     identity.record_role == kBhrcRecordRoleSelf &&
     identity.record_key == probe.record_key &&
-    identity.host_steam_id == probe.host_steam_id &&
+    (identity.host_steam_id == probe.host_steam_id ||
+     (friend_join_mode &&
+      identity.master_lobby_id == probe.master_lobby_id)) &&
     (identity.master_lobby_id == 0 ||
      identity.master_lobby_id == probe.master_lobby_id);
 const bool identity_exact = identity_player_match &&
+    identity.host_steam_id == probe.host_steam_id &&
     identity.lobby_id == probe.expedition_lobby_id &&
     identity.generation == probe.client_generation &&
     identity.record_hash32 == probe.identity_hash32;
@@ -11605,8 +11613,11 @@ if (!identity_loaded) {
   identity.record_hash32 = probe.identity_hash32;
   identity.record_role = kBhrcRecordRoleSelf;
 } else if (identity_player_match &&
-           identity.lobby_id != probe.expedition_lobby_id) {
-  // Keep the recognized player, retarget local identity to host authority B.
+           (identity.lobby_id != probe.expedition_lobby_id ||
+            identity.host_steam_id != probe.host_steam_id)) {
+  // The host has confirmed ReturningSameB and the live A/owner/self tuple.
+  // Rebind only this working copy; normal live capture still owns persistence.
+  identity.host_steam_id = probe.host_steam_id;
   identity.lobby_id = probe.expedition_lobby_id;
   if (identity.master_lobby_id == 0) {
     identity.master_lobby_id = probe.master_lobby_id;

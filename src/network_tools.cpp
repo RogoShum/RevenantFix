@@ -2158,7 +2158,30 @@ void __fastcall HookNrscLobbyScan(void* context, uint64_t* lobby_id) {
        pre_scan_local == pre_scan_identity.record_key) &&
       pre_scan_identity.generation != 0 &&
       pre_scan_identity.record_hash32 != 0;
+  uint64_t pre_scan_fence_owner = pre_scan_identity.host_steam_id;
   if (pre_scan_old_member_fence) {
+    // A returning host can still have itself saved as owner after migration.
+    // Read only Steam's current owner for this A; NRSC still owns the actual
+    // transport commit, and the fence activates only when that tuple is live.
+    void* const matchmaking =
+        ResolveSteamMatchmakingForProbe("friend_join_ingress_owner");
+    const uint64_t vtable = matchmaking != nullptr ? ReadU64(matchmaking, 0) : 0;
+    auto get_lobby_owner = vtable != 0
+        ? reinterpret_cast<SteamMatchmakingGetLobbyOwnerFn>(
+              ReadU64(reinterpret_cast<const void*>(vtable + 0x118), 0))
+        : nullptr;
+    if (get_lobby_owner != nullptr) {
+      uint64_t steam_owner = 0;
+      __try {
+        get_lobby_owner(matchmaking, &steam_owner, lobby);
+      } __except (LogSehException(
+          "BHRC friend join ingress GetLobbyOwner", GetExceptionInformation())) {
+        steam_owner = 0;
+      }
+      if (steam_owner != 0 && steam_owner != pre_scan_identity.record_key) {
+        pre_scan_fence_owner = steam_owner;
+      }
+    }
     // FUN_1800647a0 commits A/owner/local and can synchronously expose the
     // ordinary QuickMatch ingress before it returns. Publish only the exact
     // persisted old-member scalar tuple first, so the existing firewall owns
@@ -2167,7 +2190,7 @@ void __fastcall HookNrscLobbyScan(void* context, uint64_t* lobby_id) {
         BhrcOldMemberMatchingFenceKind::PendingClassification, 0,
         pre_scan_identity.master_lobby_id,
         pre_scan_identity.lobby_id,
-        pre_scan_identity.host_steam_id,
+        pre_scan_fence_owner,
         pre_scan_identity.record_key,
         pre_scan_identity.generation,
         pre_scan_identity.record_hash32, 0, 0,
@@ -2186,7 +2209,7 @@ void __fastcall HookNrscLobbyScan(void* context, uint64_t* lobby_id) {
     if (pre_scan_old_member_fence) {
       ClearBhrcOldMemberMatchingFenceForTransport(
           pre_scan_identity.master_lobby_id,
-          pre_scan_identity.host_steam_id,
+          pre_scan_fence_owner,
           pre_scan_identity.record_key,
           "nrsc_lobby_scan_original_exception");
     }
@@ -2220,14 +2243,14 @@ void __fastcall HookNrscLobbyScan(void* context, uint64_t* lobby_id) {
   const bool pre_scan_fence_matches_committed =
       pre_scan_old_member_fence &&
       committed_master == pre_scan_identity.master_lobby_id &&
-      committed_owner == pre_scan_identity.host_steam_id &&
+      committed_owner == pre_scan_fence_owner &&
       committed_local == pre_scan_identity.record_key;
   if (pre_scan_old_member_fence &&
       (!authority_observer_armed ||
        !pre_scan_fence_matches_committed)) {
     ClearBhrcOldMemberMatchingFenceForTransport(
         pre_scan_identity.master_lobby_id,
-        pre_scan_identity.host_steam_id,
+        pre_scan_fence_owner,
         pre_scan_identity.record_key,
         !pre_scan_fence_matches_committed
             ? "nrsc_lobby_scan_committed_tuple_mismatch"
